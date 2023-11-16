@@ -22,6 +22,18 @@ pub struct MultinomialConst<const K: usize> {
     weights: [f64; K],
 }
 
+impl<const K: usize> MultinomialConst<K> {
+    pub fn new(n : u64, weights: [f64;K]) -> Self {
+
+        // With improvements in Rust support for const generics this probably be solved better
+        if K == 0 {
+            panic!("MultinomialConst<0> is not a valid type");
+        }
+
+        todo!()
+    }
+}
+
 impl<const K: usize> Distribution<[u64; K]> for MultinomialConst<K> {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> [u64; K] {
         // This follows the binomial approach in "The computer generation of multinomial random variates" by Charles S. Davis
@@ -29,7 +41,8 @@ impl<const K: usize> Distribution<[u64; K]> for MultinomialConst<K> {
 
         // We assume K >= 1
         // We assume that self.weights are all non negative and finite
-        // 
+        // If the weights sum up < 1.0 the last component will get the remaining weight
+        // If the weights sum up > 1.0 the components after the first i with weights[..i] > 1.0 will get zero weights
 
         let mut sample = [0u64; K];
         let mut remaining_p = 1.0;
