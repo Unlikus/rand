@@ -197,6 +197,7 @@ mod geometric;
 mod gumbel;
 mod hypergeometric;
 mod inverse_gaussian;
+mod multinomial;
 mod normal;
 mod normal_inverse_gaussian;
 mod pareto;
