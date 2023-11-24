@@ -34,7 +34,7 @@ impl std::fmt::Display for Error {
     }
 }
 
-/// Multinomial Distribution, which uses Binomial samples
+/// Multinomial Distribution with compile time known number of categories.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MultinomialConst<const K: usize> {
     /// Number of draws
@@ -65,8 +65,9 @@ fn normalize<const K: usize>(weights: &mut [f64; K]) -> Result<(), Error> {
 }
 
 impl<const K: usize> MultinomialConst<K> {
-    /// Constructs a new `MultinomialConst` which samples [f64;K] samples for a compile time constant K.
-    /// `weights` will be normalized so it sums up to 1
+    /// Constructs a new `MultinomialConst` which samples `[f64; K]` samples for a compile time constant `K`.
+    /// 
+    /// `weights` will be normalized so it sums up to 1.
     pub fn new(n: u64, mut weights: [f64; K]) -> Result<Self, Error> {
         // With improvements in Rust support for const generics this can probably be solved better
         if K == 0 {
