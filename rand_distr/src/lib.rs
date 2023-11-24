@@ -116,6 +116,7 @@ pub use self::normal::{Error as NormalError, LogNormal, Normal, StandardNormal};
 pub use self::normal_inverse_gaussian::{
     Error as NormalInverseGaussianError, NormalInverseGaussian,
 };
+pub use self::multinomial::MultinomialConst;
 pub use self::pareto::{Error as ParetoError, Pareto};
 pub use self::pert::{Pert, PertError};
 pub use self::poisson::{Error as PoissonError, Poisson};
