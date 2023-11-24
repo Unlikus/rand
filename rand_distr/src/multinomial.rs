@@ -12,7 +12,29 @@
 use crate::{Binomial, Distribution};
 use rand::Rng;
 
-/// Multinomial Distribution, which uses Binomail samples
+
+/// Error type returned from `Multinomial::new`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Error {
+    /// There is a negative weight or Nan
+    ProbabilityNegative,
+    /// All weights are zero
+    ProbabilityZero,
+    /// One of the weights is inf or the sum overflows
+    ProbabilityInfinity,
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Error::ProbabilityNegative => "One of the weights is negative or Nan",
+            Error::ProbabilityZero => "All of the weights are zero",
+            Error::ProbabilityInfinity => "One of the weights is inf or the sum overflows",
+        })
+    }
+}
+
+/// Multinomial Distribution, which uses Binomial samples
 #[derive(Debug, Clone, PartialEq)]
 pub struct MultinomialConst<const K: usize> {
     /// Number of draws
@@ -22,15 +44,36 @@ pub struct MultinomialConst<const K: usize> {
     weights: [f64; K],
 }
 
-impl<const K: usize> MultinomialConst<K> {
-    pub fn new(n : u64, weights: [f64;K]) -> Self {
+fn normalize<const K: usize>(weights: &mut [f64; K]) -> Result<(), Error> {
+    if weights.iter().any(|&x| x < 0.0) {
+        return Err(Error::ProbabilityNegative);
+    }
 
-        // With improvements in Rust support for const generics this probably be solved better
+    let sum: f64 = weights.iter().sum();
+
+    if sum == 0.0 {
+        return Err(Error::ProbabilityZero);
+    }
+
+    if sum == f64::INFINITY {
+        return Err(Error::ProbabilityInfinity);
+    }
+
+    weights.iter_mut().for_each(|x| *x /= sum);
+
+    Ok(())
+}
+
+impl<const K: usize> MultinomialConst<K> {
+    pub fn new(n: u64, mut weights: [f64; K]) -> Result<Self, Error> {
+        // With improvements in Rust support for const generics this can probably be solved better
         if K == 0 {
             panic!("MultinomialConst<0> is not a valid type");
         }
 
-        todo!()
+        normalize(&mut weights)?;
+
+        Ok(MultinomialConst { n, weights })
     }
 }
 
@@ -52,12 +95,12 @@ impl<const K: usize> Distribution<[u64; K]> for MultinomialConst<K> {
             if remaining_p <= 0.0 {
                 break;
             }
-            
+
             // It's possible that weights/remaining_p can become slightly bigger than 1.0
             let binomial = Binomial::new(remaining_n, (self.weights[i] / remaining_p).min(1.0))
                 .expect("We know that prob is between 0.0 and 1.0");
             sample[i] = binomial.sample(rng);
-            //This cannot overflow because sample[i] is garantied to be <= remaining_n, because it's a binomial sample
+            // This cannot overflow because sample[i] is garantied to be <= remaining_n, because it's a binomial sample
             remaining_n -= sample[i];
             if remaining_n == 0 {
                 break;
@@ -65,7 +108,7 @@ impl<const K: usize> Distribution<[u64; K]> for MultinomialConst<K> {
             remaining_p -= self.weights[i];
         }
 
-        sample[K-1] = remaining_n;
+        sample[K - 1] = remaining_n;
 
         sample
     }
