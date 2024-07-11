@@ -26,8 +26,6 @@
 //!
 //! [Monty Hall Problem]: https://en.wikipedia.org/wiki/Monty_Hall_problem
 
-#![cfg(all(feature = "std", feature = "std_rng"))]
-
 use rand::distributions::{Distribution, Uniform};
 use rand::Rng;
 
@@ -47,7 +45,7 @@ fn simulate<R: Rng>(random_door: &Uniform<u32>, rng: &mut R) -> SimulationResult
     let open = game_host_open(car, choice, rng);
 
     // Shall we switch?
-    let switch = rng.gen();
+    let switch = rng.random();
     if switch {
         choice = switch_door(choice, open);
     }
@@ -61,7 +59,7 @@ fn simulate<R: Rng>(random_door: &Uniform<u32>, rng: &mut R) -> SimulationResult
 // Returns the door the game host opens given our choice and knowledge of
 // where the car is. The game host will never open the door with the car.
 fn game_host_open<R: Rng>(car: u32, choice: u32, rng: &mut R) -> u32 {
-    use rand::seq::SliceRandom;
+    use rand::seq::IndexedRandom;
     *free_doors(&[car, choice]).choose(rng).unwrap()
 }
 

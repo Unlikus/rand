@@ -1,7 +1,9 @@
+//! The inverse Gaussian distribution `IG(μ, λ)`.
+
 use crate::{Distribution, Standard, StandardNormal};
+use core::fmt;
 use num_traits::Float;
 use rand::Rng;
-use core::fmt;
 
 /// Error type returned from `InverseGaussian::new`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,10 +24,29 @@ impl fmt::Display for Error {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 impl std::error::Error for Error {}
 
-/// The [inverse Gaussian distribution](https://en.wikipedia.org/wiki/Inverse_Gaussian_distribution)
+/// The [inverse Gaussian distribution](https://en.wikipedia.org/wiki/Inverse_Gaussian_distribution) `IG(μ, λ)`.
+///
+/// This is a continuous probability distribution with mean parameter `μ` (`mu`)
+/// and shape parameter `λ` (`lambda`), defined for `x > 0`.
+/// It is also known as the Wald distribution.
+///
+/// # Plot
+///
+/// The following plot shows the inverse Gaussian distribution
+/// with various values of `μ` and `λ`.
+///
+/// ![Inverse Gaussian distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/inverse_gaussian.svg)
+///
+/// # Example
+/// ```
+/// use rand_distr::{InverseGaussian, Distribution};
+///
+/// let inv_gauss = InverseGaussian::new(1.0, 2.0).unwrap();
+/// let v = inv_gauss.sample(&mut rand::thread_rng());
+/// println!("{} is from a inverse Gaussian(1, 2) distribution", v);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde1", derive(serde::Serialize, serde::Deserialize))]
 pub struct InverseGaussian<F>
@@ -68,7 +89,9 @@ where
 {
     #[allow(clippy::many_single_char_names)]
     fn sample<R>(&self, rng: &mut R) -> F
-    where R: Rng + ?Sized {
+    where
+        R: Rng + ?Sized,
+    {
         let mu = self.mean;
         let l = self.shape;
 
@@ -79,7 +102,7 @@ where
 
         let x = mu + mu_2l * (y - (F::from(4.).unwrap() * l * y + y * y).sqrt());
 
-        let u: F = rng.gen();
+        let u: F = rng.random();
 
         if u <= mu / (mu + x) {
             return x;
@@ -112,6 +135,9 @@ mod tests {
 
     #[test]
     fn inverse_gaussian_distributions_can_be_compared() {
-        assert_eq!(InverseGaussian::new(1.0, 2.0), InverseGaussian::new(1.0, 2.0));
+        assert_eq!(
+            InverseGaussian::new(1.0, 2.0),
+            InverseGaussian::new(1.0, 2.0)
+        );
     }
 }

@@ -8,22 +8,23 @@
 
 //! The implementations of the `Standard` distribution for other built-in types.
 
-use core::char;
-use core::num::Wrapping;
 #[cfg(feature = "alloc")]
 use alloc::string::String;
+use core::char;
+use core::num::Wrapping;
 
-use crate::distributions::{Distribution, Standard, Uniform};
 #[cfg(feature = "alloc")]
 use crate::distributions::DistString;
+use crate::distributions::{Distribution, Standard, Uniform};
 use crate::Rng;
 
-#[cfg(feature = "serde1")]
-use serde::{Serialize, Deserialize};
 use core::mem::{self, MaybeUninit};
 #[cfg(feature = "simd_support")]
-use core::simd::*;
-
+use core::simd::prelude::*;
+#[cfg(feature = "simd_support")]
+use core::simd::{LaneCount, MaskElement, SupportedLaneCount};
+#[cfg(feature = "serde1")]
+use serde::{Deserialize, Serialize};
 
 // ----- Sampling distributions -----
 
@@ -68,7 +69,6 @@ use core::simd::*;
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct Alphanumeric;
-
 
 // ----- Implementations of distributions -----
 
@@ -146,28 +146,26 @@ impl Distribution<bool> for Standard {
     }
 }
 
-/// Requires nightly Rust and the [`simd_support`] feature
-///
 /// Note that on some hardware like x86/64 mask operations like [`_mm_blendv_epi8`]
 /// only care about a single bit. This means that you could use uniform random bits
 /// directly:
 ///
 /// ```ignore
 /// // this may be faster...
-/// let x = unsafe { _mm_blendv_epi8(a.into(), b.into(), rng.gen::<__m128i>()) };
+/// let x = unsafe { _mm_blendv_epi8(a.into(), b.into(), rng.random::<__m128i>()) };
 ///
 /// // ...than this
-/// let x = rng.gen::<mask8x16>().select(b, a);
+/// let x = rng.random::<mask8x16>().select(b, a);
 /// ```
 ///
 /// Since most bits are unused you could also generate only as many bits as you need, i.e.:
 /// ```
 /// #![feature(portable_simd)]
-/// use std::simd::*;
+/// use std::simd::prelude::*;
 /// use rand::prelude::*;
 /// let mut rng = thread_rng();
 ///
-/// let x = u16x8::splat(rng.gen::<u8>() as u16);
+/// let x = u16x8::splat(rng.random::<u8>() as u16);
 /// let mask = u16x8::splat(1) << u16x8::from([0, 1, 2, 3, 4, 5, 6, 7]);
 /// let rand_mask = (x & mask).simd_eq(mask);
 /// ```
@@ -186,7 +184,7 @@ where
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Mask<T, LANES> {
         // `MaskElement` must be a signed integer, so this is equivalent
         // to the scalar `i32 < 0` method
-        let var = rng.gen::<Simd<T, LANES>>();
+        let var = rng.random::<Simd<T, LANES>>();
         var.simd_lt(Simd::default())
     }
 }
@@ -205,7 +203,7 @@ macro_rules! tuple_impl {
                 let out = ($(
                     // use the $tyvar's to get the appropriate number of
                     // repeats (they're not actually needed)
-                    rng.gen::<$tyvar>()
+                    rng.random::<$tyvar>()
                 ,)*);
 
                 // Suppress the unused variable warning for empty tuple
@@ -237,14 +235,15 @@ macro_rules! tuple_impls {
 tuple_impls! {A B C D E F G H I J K L}
 
 impl<T, const N: usize> Distribution<[T; N]> for Standard
-where Standard: Distribution<T>
+where
+    Standard: Distribution<T>,
 {
     #[inline]
     fn sample<R: Rng + ?Sized>(&self, _rng: &mut R) -> [T; N] {
         let mut buff: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
 
         for elem in &mut buff {
-            *elem = MaybeUninit::new(_rng.gen());
+            *elem = MaybeUninit::new(_rng.random());
         }
 
         unsafe { mem::transmute_copy::<_, _>(&buff) }
@@ -252,13 +251,14 @@ where Standard: Distribution<T>
 }
 
 impl<T> Distribution<Option<T>> for Standard
-where Standard: Distribution<T>
+where
+    Standard: Distribution<T>,
 {
     #[inline]
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Option<T> {
         // UFCS is needed here: https://github.com/rust-lang/rust/issues/24066
-        if rng.gen::<bool>() {
-            Some(rng.gen())
+        if rng.random::<bool>() {
+            Some(rng.random())
         } else {
             None
         }
@@ -266,20 +266,19 @@ where Standard: Distribution<T>
 }
 
 impl<T> Distribution<Wrapping<T>> for Standard
-where Standard: Distribution<T>
+where
+    Standard: Distribution<T>,
 {
     #[inline]
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Wrapping<T> {
-        Wrapping(rng.gen())
+        Wrapping(rng.random())
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::RngCore;
-    #[cfg(feature = "alloc")] use alloc::string::String;
 
     #[test]
     fn test_misc() {
@@ -298,7 +297,7 @@ mod tests {
         // Test by generating a relatively large number of chars, so we also
         // take the rejection sampling path.
         let word: String = iter::repeat(())
-            .map(|()| rng.gen::<char>())
+            .map(|()| rng.random::<char>())
             .take(1000)
             .collect();
         assert!(!word.is_empty());
@@ -313,9 +312,7 @@ mod tests {
         let mut incorrect = false;
         for _ in 0..100 {
             let c: char = rng.sample(Alphanumeric).into();
-            incorrect |= !(('0'..='9').contains(&c) ||
-                           ('A'..='Z').contains(&c) ||
-                           ('a'..='z').contains(&c) );
+            incorrect |= !c.is_ascii_alphanumeric();
         }
         assert!(!incorrect);
     }
@@ -323,64 +320,78 @@ mod tests {
     #[test]
     fn value_stability() {
         fn test_samples<T: Copy + core::fmt::Debug + PartialEq, D: Distribution<T>>(
-            distr: &D, zero: T, expected: &[T],
+            distr: &D,
+            zero: T,
+            expected: &[T],
         ) {
             let mut rng = crate::test::rng(807);
             let mut buf = [zero; 5];
             for x in &mut buf {
-                *x = rng.sample(&distr);
+                *x = rng.sample(distr);
             }
             assert_eq!(&buf, expected);
         }
 
-        test_samples(&Standard, 'a', &[
-            '\u{8cdac}',
-            '\u{a346a}',
-            '\u{80120}',
-            '\u{ed692}',
-            '\u{35888}',
-        ]);
+        test_samples(
+            &Standard,
+            'a',
+            &[
+                '\u{8cdac}',
+                '\u{a346a}',
+                '\u{80120}',
+                '\u{ed692}',
+                '\u{35888}',
+            ],
+        );
         test_samples(&Alphanumeric, 0, &[104, 109, 101, 51, 77]);
         test_samples(&Standard, false, &[true, true, false, true, false]);
-        test_samples(&Standard, None as Option<bool>, &[
-            Some(true),
-            None,
-            Some(false),
-            None,
-            Some(false),
-        ]);
-        test_samples(&Standard, Wrapping(0i32), &[
-            Wrapping(-2074640887),
-            Wrapping(-1719949321),
-            Wrapping(2018088303),
-            Wrapping(-547181756),
-            Wrapping(838957336),
-        ]);
+        test_samples(
+            &Standard,
+            None as Option<bool>,
+            &[Some(true), None, Some(false), None, Some(false)],
+        );
+        test_samples(
+            &Standard,
+            Wrapping(0i32),
+            &[
+                Wrapping(-2074640887),
+                Wrapping(-1719949321),
+                Wrapping(2018088303),
+                Wrapping(-547181756),
+                Wrapping(838957336),
+            ],
+        );
 
         // We test only sub-sets of tuple and array impls
         test_samples(&Standard, (), &[(), (), (), (), ()]);
-        test_samples(&Standard, (false,), &[
-            (true,),
-            (true,),
+        test_samples(
+            &Standard,
             (false,),
-            (true,),
-            (false,),
-        ]);
-        test_samples(&Standard, (false, false), &[
-            (true, true),
-            (false, true),
+            &[(true,), (true,), (false,), (true,), (false,)],
+        );
+        test_samples(
+            &Standard,
             (false, false),
-            (true, false),
-            (false, false),
-        ]);
+            &[
+                (true, true),
+                (false, true),
+                (false, false),
+                (true, false),
+                (false, false),
+            ],
+        );
 
         test_samples(&Standard, [0u8; 0], &[[], [], [], [], []]);
-        test_samples(&Standard, [0u8; 3], &[
-            [9, 247, 111],
-            [68, 24, 13],
-            [174, 19, 194],
-            [172, 69, 213],
-            [149, 207, 29],
-        ]);
+        test_samples(
+            &Standard,
+            [0u8; 3],
+            &[
+                [9, 247, 111],
+                [68, 24, 13],
+                [174, 19, 194],
+                [172, 69, 213],
+                [149, 207, 29],
+            ],
+        );
     }
 }

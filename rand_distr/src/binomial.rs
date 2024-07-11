@@ -7,19 +7,32 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! The binomial distribution.
+//! The binomial distribution `Binomial(n, p)`.
 
 use crate::{Distribution, Uniform};
-use rand::Rng;
-use core::fmt;
 use core::cmp::Ordering;
+use core::fmt;
 #[allow(unused_imports)]
 use num_traits::Float;
+use rand::Rng;
 
-/// The binomial distribution `Binomial(n, p)`.
+/// The [binomial distribution](https://en.wikipedia.org/wiki/Binomial_distribution) `Binomial(n, p)`.
 ///
-/// This distribution has density function:
+/// The binomial distribution is a discrete probability distribution
+/// which describes the probability of seeing `k` successes in `n`
+/// independent trials, each of which has success probability `p`.
+///
+/// # Density function
+///
 /// `f(k) = n!/(k! (n-k)!) p^k (1-p)^(n-k)` for `k >= 0`.
+///
+/// # Plot
+///
+/// The following plot of the binomial distribution illustrates the
+/// probability of `k` successes out of `n = 10` trials with `p = 0.2`
+/// and `p = 0.6` for `0 <= k <= n`.
+///
+/// ![Binomial distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/binomial.svg)
 ///
 /// # Example
 ///
@@ -58,7 +71,6 @@ impl fmt::Display for Error {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 impl std::error::Error for Error {}
 
 impl Binomial {
@@ -77,7 +89,7 @@ impl Binomial {
 
 /// Convert a `f64` to an `i64`, panicking on overflow.
 fn f64_to_i64(x: f64) -> i64 {
-    assert!(x < (core::i64::MAX as f64));
+    assert!(x < (i64::MAX as f64));
     x as i64
 }
 
@@ -110,24 +122,24 @@ impl Distribution<u64> for Binomial {
         // Threshold for preferring the BINV algorithm. The paper suggests 10,
         // Ranlib uses 30, and GSL uses 14.
         const BINV_THRESHOLD: f64 = 10.;
-        
+
         // Same value as in GSL.
         // It is possible for BINV to get stuck, so we break if x > BINV_MAX_X and try again.
         // It would be safer to set BINV_MAX_X to self.n, but it is extremely unlikely to be relevant.
         // When n*p < 10, so is n*p*q which is the variance, so a result > 110 would be 100 / sqrt(10) = 31 standard deviations away.
-        const BINV_MAX_X : u64 = 110;
+        const BINV_MAX_X: u64 = 110;
 
-        if (self.n as f64) * p < BINV_THRESHOLD && self.n <= (core::i32::MAX as u64) {
+        if (self.n as f64) * p < BINV_THRESHOLD && self.n <= (i32::MAX as u64) {
             // Use the BINV algorithm.
             let s = p / q;
             let a = ((self.n + 1) as f64) * s;
-            
+
             result = 'outer: loop {
                 let mut r = q.powi(self.n as i32);
-                let mut u: f64 = rng.gen();
+                let mut u: f64 = rng.random();
                 let mut x = 0;
 
-                while u > r as f64 {
+                while u > r {
                     u -= r;
                     x += 1;
                     if x > BINV_MAX_X {
@@ -136,7 +148,6 @@ impl Distribution<u64> for Binomial {
                     r *= a / (x as f64) - s;
                 }
                 break x;
-            
             }
         } else {
             // Use the BTPE algorithm.
@@ -238,7 +249,7 @@ impl Distribution<u64> for Binomial {
                                     break;
                                 }
                             }
-                        },
+                        }
                         Ordering::Greater => {
                             let mut i = y;
                             loop {
@@ -248,8 +259,8 @@ impl Distribution<u64> for Binomial {
                                     break;
                                 }
                             }
-                        },
-                        Ordering::Equal => {},
+                        }
+                        Ordering::Equal => {}
                     }
                     if v > f {
                         continue;
@@ -332,7 +343,7 @@ mod test {
         }
 
         let mean = results.iter().sum::<f64>() / results.len() as f64;
-        assert!((mean as f64 - expected_mean).abs() < expected_mean / 50.0);
+        assert!((mean - expected_mean).abs() < expected_mean / 50.0);
 
         let variance =
             results.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / results.len() as f64;
@@ -366,7 +377,7 @@ mod test {
     fn binomial_distributions_can_be_compared() {
         assert_eq!(Binomial::new(1, 1.0), Binomial::new(1, 1.0));
     }
-    
+
     #[test]
     fn binomial_avoid_infinite_loop() {
         let dist = Binomial::new(16000000, 3.1444753148558566e-10).unwrap();

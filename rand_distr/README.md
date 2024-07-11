@@ -5,7 +5,6 @@
 [![Book](https://img.shields.io/badge/book-master-yellow.svg)](https://rust-random.github.io/book/)
 [![API](https://img.shields.io/badge/api-master-yellow.svg)](https://rust-random.github.io/rand/rand_distr)
 [![API](https://docs.rs/rand_distr/badge.svg)](https://docs.rs/rand_distr)
-[![Minimum rustc version](https://img.shields.io/badge/rustc-1.60+-lightgray.svg)](https://github.com/rust-random/rand#rust-version-requirements)
 
 Implements a full suite of random number distribution sampling routines.
 
@@ -26,7 +25,8 @@ The floating point functions from `num_traits` and `libm` are used to support
 `no_std` environments and ensure reproducibility. If the floating point
 functions from `std` are preferred, which may provide better accuracy and
 performance but may produce different random values, the `std_math` feature
-can be enabled.
+can be enabled. (Note that any other crate depending on `num-traits` with the
+`std` feature (default-enabled) will have the same effect.)
 
 ## Crate features
 

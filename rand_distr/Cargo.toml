@@ -1,6 +1,6 @@
 [package]
 name = "rand_distr"
-version = "0.5.0"
+version = "0.5.0-alpha.1"
 authors = ["The Rand Project Developers"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -13,30 +13,35 @@ Sampling from random number distributions
 keywords = ["random", "rng", "distribution", "probability"]
 categories = ["algorithms", "no-std"]
 edition = "2021"
-rust-version = "1.60"
-include = ["src/", "LICENSE-*", "README.md", "CHANGELOG.md", "COPYRIGHT"]
+rust-version = "1.61"
+include = ["/src", "LICENSE-*", "README.md", "CHANGELOG.md", "COPYRIGHT"]
 
 [package.metadata.docs.rs]
-rustdoc-args = ["--generate-link-to-definition"]
+rustdoc-args = ["--cfg docsrs", "--generate-link-to-definition"]
 
 [features]
 default = ["std"]
 std = ["alloc", "rand/std"]
 alloc = ["rand/alloc"]
+
+# Use std's floating-point arithmetic instead of libm.
+# Note that any other crate depending on `num-traits`'s `std`
+# feature (default-enabled) will have the same effect.
 std_math = ["num-traits/std"]
+
 serde1 = ["serde", "rand/serde1"]
 
 [dependencies]
-rand = { path = "..", version = "0.9.0", default-features = false }
+rand = { path = "..", version = "=0.9.0-alpha.1", default-features = false }
 num-traits = { version = "0.2", default-features = false, features = ["libm"] }
 serde = { version = "1.0.103", features = ["derive"], optional = true }
-serde_with = { version = "1.14.0", optional = true }
+serde_with = { version = "3.6.1", optional = true }
 
 [dev-dependencies]
-rand_pcg = { version = "0.4.0", path = "../rand_pcg" }
+rand_pcg = { version = "=0.9.0-alpha.1", path = "../rand_pcg" }
 # For inline examples
-rand = { path = "..", version = "0.9.0", features = ["small_rng"] }
+rand = { path = "..", version = "=0.9.0-alpha.1", features = ["small_rng"] }
 # Histogram implementation for testing uniformity
-average = { version = "0.13", features = [ "std" ] }
+average = { version = "0.15", features = [ "std" ] }
 # Special functions for testing distributions
-special = "0.8.1"
+special = "0.10.3"

@@ -7,13 +7,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! The dirichlet distribution.
+//! The dirichlet distribution `Dirichlet(α₁, α₂, ..., αₙ)`.
+
 #![cfg(feature = "alloc")]
 use crate::{Beta, Distribution, Exp1, Gamma, Open01, StandardNormal};
 use core::fmt;
 use num_traits::{Float, NumCast};
 use rand::Rng;
-#[cfg(feature = "serde_with")] use serde_with::serde_as;
+#[cfg(feature = "serde_with")]
+use serde_with::serde_as;
 
 use alloc::{boxed::Box, vec, vec::Vec};
 
@@ -30,7 +32,6 @@ where
 }
 
 /// Error type returned from `DirchletFromGamma::new`.
-#[cfg_attr(doc_cfg, doc(cfg(feature = "alloc")))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DirichletFromGammaError {
     /// Gamma::new(a, 1) failed.
@@ -103,7 +104,6 @@ where
 }
 
 /// Error type returned from `DirchletFromBeta::new`.
-#[cfg_attr(doc_cfg, doc(cfg(feature = "alloc")))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DirichletFromBetaError {
     /// Beta::new(a, b) failed.
@@ -186,11 +186,23 @@ where
     FromBeta(DirichletFromBeta<F, N>),
 }
 
-/// The Dirichlet distribution `Dirichlet(alpha)`.
+/// The [Dirichlet distribution](https://en.wikipedia.org/wiki/Dirichlet_distribution) `Dirichlet(α₁, α₂, ..., αₖ)`.
 ///
 /// The Dirichlet distribution is a family of continuous multivariate
-/// probability distributions parameterized by a vector alpha of positive reals.
-/// It is a multivariate generalization of the beta distribution.
+/// probability distributions parameterized by a vector of positive
+/// real numbers `α₁, α₂, ..., αₖ`, where `k` is the number of dimensions
+/// of the distribution. The distribution is supported on the `k-1`-dimensional
+/// simplex, which is the set of points `x = [x₁, x₂, ..., xₖ]` such that
+/// `0 ≤ xᵢ ≤ 1` and `∑ xᵢ = 1`.
+/// It is a multivariate generalization of the [`Beta`](crate::Beta) distribution.
+/// The distribution is symmetric when all `αᵢ` are equal.
+///
+/// # Plot
+///
+/// The following plot illustrates the 2-dimensional simplices for various
+/// 3-dimensional Dirichlet distributions.
+///
+/// ![Dirichlet distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/dirichlet.png)
 ///
 /// # Example
 ///
@@ -202,7 +214,6 @@ where
 /// let samples = dirichlet.sample(&mut rand::thread_rng());
 /// println!("{:?} is from a Dirichlet([1.0, 2.0, 3.0]) distribution", samples);
 /// ```
-#[cfg_attr(doc_cfg, doc(cfg(feature = "alloc")))]
 #[cfg_attr(feature = "serde_with", serde_as)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dirichlet<F, const N: usize>
@@ -216,7 +227,6 @@ where
 }
 
 /// Error type returned from `Dirchlet::new`.
-#[cfg_attr(doc_cfg, doc(cfg(feature = "alloc")))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     /// `alpha.len() < 2`.
@@ -256,7 +266,6 @@ impl fmt::Display for Error {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 impl std::error::Error for Error {}
 
 impl<F, const N: usize> Dirichlet<F, N>

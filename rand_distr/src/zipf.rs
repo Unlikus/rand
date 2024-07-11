@@ -8,19 +8,28 @@
 
 //! The Zeta and related distributions.
 
-use num_traits::Float;
 use crate::{Distribution, Standard};
-use rand::{Rng, distributions::OpenClosed01};
 use core::fmt;
+use num_traits::Float;
+use rand::{distributions::OpenClosed01, Rng};
 
-/// Samples integers according to the [zeta distribution].
+/// The [Zeta distribution](https://en.wikipedia.org/wiki/Zeta_distribution) `Zeta(s)`.
 ///
-/// The zeta distribution is a limit of the [`Zipf`] distribution. Sometimes it
-/// is called one of the following: discrete Pareto, Riemann-Zeta, Zipf, or
-/// Zipf–Estoup distribution.
+/// The [Zeta distribution](https://en.wikipedia.org/wiki/Zeta_distribution)
+/// is a discrete probability distribution with parameter `s`.
+/// It is a special case of the [`Zipf`] distribution with `n = ∞`.
+/// It is also known as the discrete Pareto, Riemann-Zeta, Zipf, or Zipf–Estoup distribution.
 ///
-/// It has the density function `f(k) = k^(-a) / C(a)` for `k >= 1`, where `a`
-/// is the parameter and `C(a)` is the Riemann zeta function.
+/// # Density function
+///
+/// `f(k) = k^(-s) / ζ(s)` for `k >= 1`, where `ζ` is the
+/// [Riemann zeta function](https://en.wikipedia.org/wiki/Riemann_zeta_function).
+///
+/// # Plot
+///
+/// The following plot illustrates the zeta distribution for various values of `s`.
+///
+/// ![Zeta distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/zeta.svg)
 ///
 /// # Example
 /// ```
@@ -31,83 +40,89 @@ use core::fmt;
 /// println!("{}", val);
 /// ```
 ///
-/// # Remarks
+/// # Notes
 ///
 /// The zeta distribution has no upper limit. Sampled values may be infinite.
 /// In particular, a value of infinity might be returned for the following
 /// reasons:
 /// 1. it is the best representation in the type `F` of the actual sample.
-/// 2. to prevent infinite loops for very small `a`.
+/// 2. to prevent infinite loops for very small `s`.
 ///
 /// # Implementation details
 ///
-/// We are using the algorithm from [Non-Uniform Random Variate Generation],
+/// We are using the algorithm from
+/// [Non-Uniform Random Variate Generation](https://doi.org/10.1007/978-1-4613-8643-8),
 /// Section 6.1, page 551.
-///
-/// [zeta distribution]: https://en.wikipedia.org/wiki/Zeta_distribution
-/// [Non-Uniform Random Variate Generation]: https://doi.org/10.1007/978-1-4613-8643-8
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Zeta<F>
-where F: Float, Standard: Distribution<F>, OpenClosed01: Distribution<F>
+where
+    F: Float,
+    Standard: Distribution<F>,
+    OpenClosed01: Distribution<F>,
 {
-    a_minus_1: F,
+    s_minus_1: F,
     b: F,
 }
 
 /// Error type returned from `Zeta::new`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZetaError {
-    /// `a <= 1` or `nan`.
-    ATooSmall,
+    /// `s <= 1` or `nan`.
+    STooSmall,
 }
 
 impl fmt::Display for ZetaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            ZetaError::ATooSmall => "a <= 1 or is NaN in Zeta distribution",
+            ZetaError::STooSmall => "s <= 1 or is NaN in Zeta distribution",
         })
     }
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 impl std::error::Error for ZetaError {}
 
 impl<F> Zeta<F>
-where F: Float, Standard: Distribution<F>, OpenClosed01: Distribution<F>
+where
+    F: Float,
+    Standard: Distribution<F>,
+    OpenClosed01: Distribution<F>,
 {
-    /// Construct a new `Zeta` distribution with given `a` parameter.
+    /// Construct a new `Zeta` distribution with given `s` parameter.
     #[inline]
-    pub fn new(a: F) -> Result<Zeta<F>, ZetaError> {
-        if !(a > F::one()) {
-            return Err(ZetaError::ATooSmall);
+    pub fn new(s: F) -> Result<Zeta<F>, ZetaError> {
+        if !(s > F::one()) {
+            return Err(ZetaError::STooSmall);
         }
-        let a_minus_1 = a - F::one();
+        let s_minus_1 = s - F::one();
         let two = F::one() + F::one();
         Ok(Zeta {
-            a_minus_1,
-            b: two.powf(a_minus_1),
+            s_minus_1,
+            b: two.powf(s_minus_1),
         })
     }
 }
 
 impl<F> Distribution<F> for Zeta<F>
-where F: Float, Standard: Distribution<F>, OpenClosed01: Distribution<F>
+where
+    F: Float,
+    Standard: Distribution<F>,
+    OpenClosed01: Distribution<F>,
 {
     #[inline]
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> F {
         loop {
             let u = rng.sample(OpenClosed01);
-            let x = u.powf(-F::one() / self.a_minus_1).floor();
+            let x = u.powf(-F::one() / self.s_minus_1).floor();
             debug_assert!(x >= F::one());
             if x.is_infinite() {
-                // For sufficiently small `a`, `x` will always be infinite,
+                // For sufficiently small `s`, `x` will always be infinite,
                 // which is rejected, resulting in an infinite loop. We avoid
                 // this by always returning infinity instead.
                 return x;
             }
 
-            let t = (F::one() + F::one() / x).powf(self.a_minus_1);
+            let t = (F::one() + F::one() / x).powf(self.s_minus_1);
 
             let v = rng.sample(Standard);
             if v * x * (t - F::one()) * self.b <= t * (self.b - F::one()) {
@@ -117,15 +132,22 @@ where F: Float, Standard: Distribution<F>, OpenClosed01: Distribution<F>
     }
 }
 
-/// Samples integers according to the Zipf distribution.
+/// The Zipf (Zipfian) distribution `Zipf(n, s)`.
 ///
-/// The samples follow Zipf's law: The frequency of each sample from a finite
-/// set of size `n` is inversely proportional to a power of its frequency rank
-/// (with exponent `s`).
+/// The samples follow [Zipf's law](https://en.wikipedia.org/wiki/Zipf%27s_law):
+/// The frequency of each sample from a finite set of size `n` is inversely
+/// proportional to a power of its frequency rank (with exponent `s`).
 ///
-/// For large `n`, this converges to the [`Zeta`] distribution.
+/// For large `n`, this converges to the [`Zeta`](crate::Zeta) distribution.
 ///
-/// For `s = 0`, this becomes a uniform distribution.
+/// For `s = 0`, this becomes a [`uniform`](crate::Uniform) distribution.
+///
+/// # Plot
+///
+/// The following plot illustrates the Zipf distribution for `n = 10` and
+/// various values of `s`.
+///
+/// ![Zipf distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/zipf.svg)
 ///
 /// # Example
 /// ```
@@ -144,7 +166,10 @@ where F: Float, Standard: Distribution<F>, OpenClosed01: Distribution<F>
 /// [1]: https://jasoncrease.medium.com/rejection-sampling-the-zipf-distribution-6b359792cffa
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Zipf<F>
-where F: Float, Standard: Distribution<F> {
+where
+    F: Float,
+    Standard: Distribution<F>,
+{
     s: F,
     t: F,
     q: F,
@@ -169,11 +194,13 @@ impl fmt::Display for ZipfError {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 impl std::error::Error for ZipfError {}
 
 impl<F> Zipf<F>
-where F: Float, Standard: Distribution<F> {
+where
+    F: Float,
+    Standard: Distribution<F>,
+{
     /// Construct a new `Zipf` distribution for a set with `n` elements and a
     /// frequency rank exponent `s`.
     ///
@@ -186,7 +213,7 @@ where F: Float, Standard: Distribution<F> {
         if n < 1 {
             return Err(ZipfError::NTooSmall);
         }
-        let n = F::from(n).unwrap();  // This does not fail.
+        let n = F::from(n).unwrap(); // This does not fail.
         let q = if s != F::one() {
             // Make sure to calculate the division only once.
             F::one() / (F::one() - s)
@@ -200,9 +227,7 @@ where F: Float, Standard: Distribution<F> {
             F::one() + n.ln()
         };
         debug_assert!(t > F::zero());
-        Ok(Zipf {
-            s, t, q
-        })
+        Ok(Zipf { s, t, q })
     }
 
     /// Inverse cumulative density function
@@ -221,7 +246,9 @@ where F: Float, Standard: Distribution<F> {
 }
 
 impl<F> Distribution<F> for Zipf<F>
-where F: Float, Standard: Distribution<F>
+where
+    F: Float,
+    Standard: Distribution<F>,
 {
     #[inline]
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> F {
@@ -246,9 +273,7 @@ where F: Float, Standard: Distribution<F>
 mod tests {
     use super::*;
 
-    fn test_samples<F: Float + core::fmt::Debug, D: Distribution<F>>(
-        distr: D, zero: F, expected: &[F],
-    ) {
+    fn test_samples<F: Float + fmt::Debug, D: Distribution<F>>(distr: D, zero: F, expected: &[F]) {
         let mut rng = crate::test::rng(213);
         let mut buf = [zero; 4];
         for x in &mut buf {
@@ -266,7 +291,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn zeta_nan() {
-        Zeta::new(core::f64::NAN).unwrap();
+        Zeta::new(f64::NAN).unwrap();
     }
 
     #[test]
@@ -293,12 +318,8 @@ mod tests {
 
     #[test]
     fn zeta_value_stability() {
-        test_samples(Zeta::new(1.5).unwrap(), 0f32, &[
-            1.0, 2.0, 1.0, 1.0,
-        ]);
-        test_samples(Zeta::new(2.0).unwrap(), 0f64, &[
-            2.0, 1.0, 1.0, 1.0,
-        ]);
+        test_samples(Zeta::new(1.5).unwrap(), 0f32, &[1.0, 2.0, 1.0, 1.0]);
+        test_samples(Zeta::new(2.0).unwrap(), 0f64, &[2.0, 1.0, 1.0, 1.0]);
     }
 
     #[test]
@@ -316,7 +337,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn zipf_nan() {
-        Zipf::new(10, core::f64::NAN).unwrap();
+        Zipf::new(10, f64::NAN).unwrap();
     }
 
     #[test]
@@ -352,7 +373,7 @@ mod tests {
 
     #[test]
     fn zipf_sample_large_n() {
-        let d = Zipf::new(core::u64::MAX, 1.5).unwrap();
+        let d = Zipf::new(u64::MAX, 1.5).unwrap();
         let mut rng = crate::test::rng(2);
         for _ in 0..1000 {
             let r = d.sample(&mut rng);
@@ -363,12 +384,8 @@ mod tests {
 
     #[test]
     fn zipf_value_stability() {
-        test_samples(Zipf::new(10, 0.5).unwrap(), 0f32, &[
-            10.0, 2.0, 6.0, 7.0
-        ]);
-        test_samples(Zipf::new(10, 2.0).unwrap(), 0f64, &[
-            1.0, 2.0, 3.0, 2.0
-        ]);
+        test_samples(Zipf::new(10, 0.5).unwrap(), 0f32, &[10.0, 2.0, 6.0, 7.0]);
+        test_samples(Zipf::new(10, 2.0).unwrap(), 0f64, &[1.0, 2.0, 3.0, 2.0]);
     }
 
     #[test]

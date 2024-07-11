@@ -6,18 +6,27 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! The Bernoulli distribution.
+//! The Bernoulli distribution `Bernoulli(p)`.
 
 use crate::distributions::Distribution;
 use crate::Rng;
-use core::{fmt, u64};
+use core::fmt;
 
 #[cfg(feature = "serde1")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-/// The Bernoulli distribution.
+/// The [Bernoulli distribution](https://en.wikipedia.org/wiki/Bernoulli_distribution) `Bernoulli(p)`.
 ///
-/// This is a special case of the Binomial distribution where `n = 1`.
+/// This distribution describes a single boolean random variable, which is true
+/// with probability `p` and false with probability `1 - p`.
+/// It is a special case of the Binomial distribution with `n = 1`.
+///
+/// # Plot
+///
+/// The following plot shows the Bernoulli distribution with `p = 0.1`,
+/// `p = 0.5`, and `p = 0.9`.
+///
+/// ![Bernoulli distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/bernoulli.svg)
 ///
 /// # Example
 ///
@@ -82,7 +91,7 @@ impl fmt::Display for BernoulliError {
 }
 
 #[cfg(feature = "std")]
-impl ::std::error::Error for BernoulliError {}
+impl std::error::Error for BernoulliError {}
 
 impl Bernoulli {
     /// Construct a new `Bernoulli` with the given probability of success `p`.
@@ -136,7 +145,7 @@ impl Distribution<bool> for Bernoulli {
         if self.p_int == ALWAYS_TRUE {
             return true;
         }
-        let v: u64 = rng.gen();
+        let v: u64 = rng.random();
         v < self.p_int
     }
 }
@@ -151,7 +160,8 @@ mod test {
     #[cfg(feature = "serde1")]
     fn test_serializing_deserializing_bernoulli() {
         let coin_flip = Bernoulli::new(0.5).unwrap();
-        let de_coin_flip: Bernoulli = bincode::deserialize(&bincode::serialize(&coin_flip).unwrap()).unwrap();
+        let de_coin_flip: Bernoulli =
+            bincode::deserialize(&bincode::serialize(&coin_flip).unwrap()).unwrap();
 
         assert_eq!(coin_flip.p_int, de_coin_flip.p_int);
     }
@@ -206,11 +216,12 @@ mod test {
         let distr = Bernoulli::new(0.4532).unwrap();
         let mut buf = [false; 10];
         for x in &mut buf {
-            *x = rng.sample(&distr);
+            *x = rng.sample(distr);
         }
-        assert_eq!(buf, [
-            true, false, false, true, false, false, true, true, true, true
-        ]);
+        assert_eq!(
+            buf,
+            [true, false, false, true, false, false, true, true, true, true]
+        );
     }
 
     #[test]

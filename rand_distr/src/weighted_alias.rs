@@ -9,15 +9,15 @@
 //! This module contains an implementation of alias method for sampling random
 //! indices with probabilities proportional to a collection of weights.
 
-use super::WeightedError;
+use super::WeightError;
 use crate::{uniform::SampleUniform, Distribution, Uniform};
+use alloc::{boxed::Box, vec, vec::Vec};
 use core::fmt;
 use core::iter::Sum;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 use rand::Rng;
-use alloc::{boxed::Box, vec, vec::Vec};
 #[cfg(feature = "serde1")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// A distribution using weighted sampling to pick a discretely selected item.
 ///
@@ -65,10 +65,15 @@ use serde::{Serialize, Deserialize};
 /// [`Vec<u32>`]: Vec
 /// [`Uniform<u32>::sample`]: Distribution::sample
 /// [`Uniform<W>::sample`]: Distribution::sample
-#[cfg_attr(doc_cfg, doc(cfg(feature = "alloc")))]
 #[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde1", serde(bound(serialize = "W: Serialize, W::Sampler: Serialize")))]
-#[cfg_attr(feature = "serde1", serde(bound(deserialize = "W: Deserialize<'de>, W::Sampler: Deserialize<'de>")))]
+#[cfg_attr(
+    feature = "serde1",
+    serde(bound(serialize = "W: Serialize, W::Sampler: Serialize"))
+)]
+#[cfg_attr(
+    feature = "serde1",
+    serde(bound(deserialize = "W: Deserialize<'de>, W::Sampler: Deserialize<'de>"))
+)]
 pub struct WeightedAliasIndex<W: AliasableWeight> {
     aliases: Box<[u32]>,
     no_alias_odds: Box<[W]>,
@@ -79,18 +84,15 @@ pub struct WeightedAliasIndex<W: AliasableWeight> {
 impl<W: AliasableWeight> WeightedAliasIndex<W> {
     /// Creates a new [`WeightedAliasIndex`].
     ///
-    /// Returns an error if:
-    /// - The vector is empty.
-    /// - The vector is longer than `u32::MAX`.
-    /// - For any weight `w`: `w < 0` or `w > max` where `max = W::MAX /
-    ///   weights.len()`.
-    /// - The sum of weights is zero.
-    pub fn new(weights: Vec<W>) -> Result<Self, WeightedError> {
+    /// Error cases:
+    /// -   [`WeightError::InvalidInput`] when `weights.len()` is zero or greater than `u32::MAX`.
+    /// -   [`WeightError::InvalidWeight`] when a weight is not-a-number,
+    ///     negative or greater than `max = W::MAX / weights.len()`.
+    /// -   [`WeightError::InsufficientNonZero`] when the sum of all weights is zero.
+    pub fn new(weights: Vec<W>) -> Result<Self, WeightError> {
         let n = weights.len();
-        if n == 0 {
-            return Err(WeightedError::NoItem);
-        } else if n > ::core::u32::MAX as usize {
-            return Err(WeightedError::TooMany);
+        if n == 0 || n > u32::MAX as usize {
+            return Err(WeightError::InvalidInput);
         }
         let n = n as u32;
 
@@ -101,7 +103,7 @@ impl<W: AliasableWeight> WeightedAliasIndex<W> {
             .iter()
             .all(|&w| W::ZERO <= w && w <= max_weight_size)
         {
-            return Err(WeightedError::InvalidWeight);
+            return Err(WeightError::InvalidWeight);
         }
 
         // The sum of weights will represent 100% of no alias odds.
@@ -113,7 +115,7 @@ impl<W: AliasableWeight> WeightedAliasIndex<W> {
             weight_sum
         };
         if weight_sum == W::ZERO {
-            return Err(WeightedError::AllWeightsZero);
+            return Err(WeightError::InsufficientNonZero);
         }
 
         // `weight_sum` would have been zero if `try_from_lossy` causes an error here.
@@ -142,8 +144,8 @@ impl<W: AliasableWeight> WeightedAliasIndex<W> {
             fn new(size: u32) -> Self {
                 Aliases {
                     aliases: vec![0; size as usize].into_boxed_slice(),
-                    smalls_head: ::core::u32::MAX,
-                    bigs_head: ::core::u32::MAX,
+                    smalls_head: u32::MAX,
+                    bigs_head: u32::MAX,
                 }
             }
 
@@ -170,11 +172,11 @@ impl<W: AliasableWeight> WeightedAliasIndex<W> {
             }
 
             fn smalls_is_empty(&self) -> bool {
-                self.smalls_head == ::core::u32::MAX
+                self.smalls_head == u32::MAX
             }
 
             fn bigs_is_empty(&self) -> bool {
-                self.bigs_head == ::core::u32::MAX
+                self.bigs_head == u32::MAX
             }
 
             fn set_alias(&mut self, idx: u32, alias: u32) {
@@ -260,7 +262,8 @@ where
 }
 
 impl<W: AliasableWeight> Clone for WeightedAliasIndex<W>
-where Uniform<W>: Clone
+where
+    Uniform<W>: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -275,7 +278,6 @@ where Uniform<W>: Clone
 /// Trait that must be implemented for weights, that are used with
 /// [`WeightedAliasIndex`]. Currently no guarantees on the correctness of
 /// [`WeightedAliasIndex`] are given for custom implementations of this trait.
-#[cfg_attr(doc_cfg, doc(cfg(feature = "alloc")))]
 pub trait AliasableWeight:
     Sized
     + Copy
@@ -311,7 +313,7 @@ pub trait AliasableWeight:
 macro_rules! impl_weight_for_float {
     ($T: ident) => {
         impl AliasableWeight for $T {
-            const MAX: Self = ::core::$T::MAX;
+            const MAX: Self = $T::MAX;
             const ZERO: Self = 0.0;
 
             fn try_from_u32_lossy(n: u32) -> Option<Self> {
@@ -340,7 +342,7 @@ fn pairwise_sum<T: AliasableWeight>(values: &[T]) -> T {
 macro_rules! impl_weight_for_int {
     ($T: ident) => {
         impl AliasableWeight for $T {
-            const MAX: Self = ::core::$T::MAX;
+            const MAX: Self = $T::MAX;
             const ZERO: Self = 0;
 
             fn try_from_u32_lossy(n: u32) -> Option<Self> {
@@ -381,24 +383,24 @@ mod test {
 
         // Floating point special cases
         assert_eq!(
-            WeightedAliasIndex::new(vec![::core::f32::INFINITY]).unwrap_err(),
-            WeightedError::InvalidWeight
+            WeightedAliasIndex::new(vec![f32::INFINITY]).unwrap_err(),
+            WeightError::InvalidWeight
         );
         assert_eq!(
             WeightedAliasIndex::new(vec![-0_f32]).unwrap_err(),
-            WeightedError::AllWeightsZero
+            WeightError::InsufficientNonZero
         );
         assert_eq!(
             WeightedAliasIndex::new(vec![-1_f32]).unwrap_err(),
-            WeightedError::InvalidWeight
+            WeightError::InvalidWeight
         );
         assert_eq!(
-            WeightedAliasIndex::new(vec![-::core::f32::INFINITY]).unwrap_err(),
-            WeightedError::InvalidWeight
+            WeightedAliasIndex::new(vec![f32::NEG_INFINITY]).unwrap_err(),
+            WeightError::InvalidWeight
         );
         assert_eq!(
-            WeightedAliasIndex::new(vec![::core::f32::NAN]).unwrap_err(),
-            WeightedError::InvalidWeight
+            WeightedAliasIndex::new(vec![f32::NAN]).unwrap_err(),
+            WeightError::InvalidWeight
         );
     }
 
@@ -416,11 +418,11 @@ mod test {
         // Signed integer special cases
         assert_eq!(
             WeightedAliasIndex::new(vec![-1_i128]).unwrap_err(),
-            WeightedError::InvalidWeight
+            WeightError::InvalidWeight
         );
         assert_eq!(
-            WeightedAliasIndex::new(vec![::core::i128::MIN]).unwrap_err(),
-            WeightedError::InvalidWeight
+            WeightedAliasIndex::new(vec![i128::MIN]).unwrap_err(),
+            WeightError::InvalidWeight
         );
     }
 
@@ -438,16 +440,18 @@ mod test {
         // Signed integer special cases
         assert_eq!(
             WeightedAliasIndex::new(vec![-1_i8]).unwrap_err(),
-            WeightedError::InvalidWeight
+            WeightError::InvalidWeight
         );
         assert_eq!(
-            WeightedAliasIndex::new(vec![::core::i8::MIN]).unwrap_err(),
-            WeightedError::InvalidWeight
+            WeightedAliasIndex::new(vec![i8::MIN]).unwrap_err(),
+            WeightError::InvalidWeight
         );
     }
 
     fn test_weighted_index<W: AliasableWeight, F: Fn(W) -> f64>(w_to_f64: F)
-    where WeightedAliasIndex<W>: fmt::Debug {
+    where
+        WeightedAliasIndex<W>: fmt::Debug,
+    {
         const NUM_WEIGHTS: u32 = 10;
         const ZERO_WEIGHT_INDEX: u32 = 3;
         const NUM_SAMPLES: u32 = 15000;
@@ -458,7 +462,8 @@ mod test {
             let random_weight_distribution = Uniform::new_inclusive(
                 W::ZERO,
                 W::MAX / W::try_from_u32_lossy(NUM_WEIGHTS).unwrap(),
-            ).unwrap();
+            )
+            .unwrap();
             for _ in 0..NUM_WEIGHTS {
                 weights.push(rng.sample(&random_weight_distribution));
             }
@@ -486,21 +491,25 @@ mod test {
 
         assert_eq!(
             WeightedAliasIndex::<W>::new(vec![]).unwrap_err(),
-            WeightedError::NoItem
+            WeightError::InvalidInput
         );
         assert_eq!(
             WeightedAliasIndex::new(vec![W::ZERO]).unwrap_err(),
-            WeightedError::AllWeightsZero
+            WeightError::InsufficientNonZero
         );
         assert_eq!(
             WeightedAliasIndex::new(vec![W::MAX, W::MAX]).unwrap_err(),
-            WeightedError::InvalidWeight
+            WeightError::InvalidWeight
         );
     }
 
     #[test]
     fn value_stability() {
-        fn test_samples<W: AliasableWeight>(weights: Vec<W>, buf: &mut [usize], expected: &[usize]) {
+        fn test_samples<W: AliasableWeight>(
+            weights: Vec<W>,
+            buf: &mut [usize],
+            expected: &[usize],
+        ) {
             assert_eq!(buf.len(), expected.len());
             let distr = WeightedAliasIndex::new(weights).unwrap();
             let mut rng = crate::test::rng(0x9c9fa0b0580a7031);
@@ -511,14 +520,20 @@ mod test {
         }
 
         let mut buf = [0; 10];
-        test_samples(vec![1i32, 1, 1, 1, 1, 1, 1, 1, 1], &mut buf, &[
-            6, 5, 7, 5, 8, 7, 6, 2, 3, 7,
-        ]);
-        test_samples(vec![0.7f32, 0.1, 0.1, 0.1], &mut buf, &[
-            2, 0, 0, 0, 0, 0, 0, 0, 1, 3,
-        ]);
-        test_samples(vec![1.0f64, 0.999, 0.998, 0.997], &mut buf, &[
-            2, 1, 2, 3, 2, 1, 3, 2, 1, 1,
-        ]);
+        test_samples(
+            vec![1i32, 1, 1, 1, 1, 1, 1, 1, 1],
+            &mut buf,
+            &[6, 5, 7, 5, 8, 7, 6, 2, 3, 7],
+        );
+        test_samples(
+            vec![0.7f32, 0.1, 0.1, 0.1],
+            &mut buf,
+            &[2, 0, 0, 0, 0, 0, 0, 0, 1, 3],
+        );
+        test_samples(
+            vec![1.0f64, 0.999, 0.998, 0.997],
+            &mut buf,
+            &[2, 1, 2, 3, 2, 1, 3, 2, 1, 1],
+        );
     }
 }

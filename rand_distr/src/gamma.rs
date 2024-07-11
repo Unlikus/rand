@@ -17,28 +17,35 @@ use self::ChiSquaredRepr::*;
 use self::GammaRepr::*;
 
 use crate::normal::StandardNormal;
-use num_traits::Float;
 use crate::{Distribution, Exp, Exp1, Open01};
-use rand::Rng;
 use core::fmt;
+use num_traits::Float;
+use rand::Rng;
 #[cfg(feature = "serde1")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-/// The Gamma distribution `Gamma(shape, scale)` distribution.
+/// The [Gamma distribution](https://en.wikipedia.org/wiki/Gamma_distribution) `Gamma(k, θ)`.
 ///
-/// The density function of this distribution is
+/// The Gamma distribution is a continuous probability distribution
+/// with shape parameter `k > 0` (number of events) and
+/// scale parameter `θ > 0` (mean waiting time between events).
+/// It describes the time until `k` events occur in a Poisson
+/// process with rate `1/θ`. It is the generalization of the
+/// [`Exponential`](crate::Exp) distribution.
 ///
-/// ```text
-/// f(x) =  x^(k - 1) * exp(-x / θ) / (Γ(k) * θ^k)
-/// ```
+/// # Density function
 ///
-/// where `Γ` is the Gamma function, `k` is the shape and `θ` is the
-/// scale and both `k` and `θ` are strictly positive.
+/// `f(x) =  x^(k - 1) * exp(-x / θ) / (Γ(k) * θ^k)` for `x > 0`,
+/// where `Γ` is the [gamma function](https://en.wikipedia.org/wiki/Gamma_function).
 ///
-/// The algorithm used is that described by Marsaglia & Tsang 2000[^1],
-/// falling back to directly sampling from an Exponential for `shape
-/// == 1`, and using the boosting technique described in that paper for
-/// `shape < 1`.
+/// # Plot
+///
+/// The following plot illustrates the Gamma distribution with
+/// various values of `k` and `θ`.
+/// Curves with `θ = 1` are more saturated, while corresponding
+/// curves with `θ = 2` have a lighter color.
+///
+/// ![Gamma distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/gamma.svg)
 ///
 /// # Example
 ///
@@ -49,6 +56,13 @@ use serde::{Serialize, Deserialize};
 /// let v = gamma.sample(&mut rand::thread_rng());
 /// println!("{} is from a Gamma(2, 5) distribution", v);
 /// ```
+///
+/// # Notes
+///
+/// The algorithm used is that described by Marsaglia & Tsang 2000[^1],
+/// falling back to directly sampling from an Exponential for `shape
+/// == 1`, and using the boosting technique described in that paper for
+/// `shape < 1`.
 ///
 /// [^1]: George Marsaglia and Wai Wan Tsang. 2000. "A Simple Method for
 ///       Generating Gamma Variables" *ACM Trans. Math. Softw.* 26, 3
@@ -88,7 +102,6 @@ impl fmt::Display for Error {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 impl std::error::Error for Error {}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -263,13 +276,22 @@ where
     }
 }
 
-/// The chi-squared distribution `χ²(k)`, where `k` is the degrees of
-/// freedom.
+/// The [chi-squared distribution](https://en.wikipedia.org/wiki/Chi-squared_distribution) `χ²(k)`.
+///
+/// The chi-squared distribution is a continuous probability
+/// distribution with parameter `k > 0` degrees of freedom.
 ///
 /// For `k > 0` integral, this distribution is the sum of the squares
 /// of `k` independent standard normal random variables. For other
 /// `k`, this uses the equivalent characterisation
 /// `χ²(k) = Gamma(k/2, 2)`.
+///
+/// # Plot
+///
+/// The plot shows the chi-squared distribution with various degrees
+/// of freedom.
+///
+/// ![Chi-squared distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/chi_squared.svg)
 ///
 /// # Example
 ///
@@ -311,7 +333,6 @@ impl fmt::Display for ChiSquaredError {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 impl std::error::Error for ChiSquaredError {}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -370,11 +391,17 @@ where
     }
 }
 
-/// The Fisher F distribution `F(m, n)`.
+/// The [Fisher F-distribution](https://en.wikipedia.org/wiki/F-distribution) `F(m, n)`.
 ///
 /// This distribution is equivalent to the ratio of two normalised
 /// chi-squared distributions, that is, `F(m,n) = (χ²(m)/m) /
 /// (χ²(n)/n)`.
+///
+/// # Plot
+///
+/// The plot shows the F-distribution with various values of `m` and `n`.
+///
+/// ![F-distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/fisher_f.svg)
 ///
 /// # Example
 ///
@@ -421,7 +448,6 @@ impl fmt::Display for FisherFError {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 impl std::error::Error for FisherFError {}
 
 impl<F> FisherF<F>
@@ -460,8 +486,25 @@ where
     }
 }
 
-/// The Student t distribution, `t(nu)`, where `nu` is the degrees of
-/// freedom.
+/// The [Student t-distribution](https://en.wikipedia.org/wiki/Student%27s_t-distribution) `t(ν)`.
+///
+/// The t-distribution is a continuous probability distribution
+/// parameterized by degrees of freedom `ν` (`nu`), which
+/// arises when estimating the mean of a normally-distributed
+/// population in situations where the sample size is small and
+/// the population's standard deviation is unknown.
+/// It is widely used in hypothesis testing.
+///
+/// For `ν = 1`, this is equivalent to the standard
+/// [`Cauchy`](crate::Cauchy) distribution,
+/// and as `ν` diverges to infinity, `t(ν)` converges to
+/// [`StandardNormal`](crate::StandardNormal).
+///
+/// # Plot
+///
+/// The plot shows the t-distribution with various degrees of freedom.
+///
+/// ![T-distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/student_t.svg)
 ///
 /// # Example
 ///
@@ -492,12 +535,12 @@ where
     Exp1: Distribution<F>,
     Open01: Distribution<F>,
 {
-    /// Create a new Student t distribution with `n` degrees of
-    /// freedom.
-    pub fn new(n: F) -> Result<StudentT<F>, ChiSquaredError> {
+    /// Create a new Student t-distribution with `ν` (nu)
+    /// degrees of freedom.
+    pub fn new(nu: F) -> Result<StudentT<F>, ChiSquaredError> {
         Ok(StudentT {
-            chi: ChiSquared::new(n)?,
-            dof: n,
+            chi: ChiSquared::new(nu)?,
+            dof: nu,
         })
     }
 }
@@ -548,7 +591,22 @@ struct BC<N> {
     kappa2: N,
 }
 
-/// The Beta distribution with shape parameters `alpha` and `beta`.
+/// The [Beta distribution](https://en.wikipedia.org/wiki/Beta_distribution) `Beta(α, β)`.
+///
+/// The Beta distribution is a continuous probability distribution
+/// defined on the interval `[0, 1]`. It is the conjugate prior for the
+/// parameter `p` of the [`Binomial`][crate::Binomial] distribution.
+///
+/// It has two shape parameters `α` (alpha) and `β` (beta) which control
+/// the shape of the distribution. Both `a` and `β` must be greater than zero.
+/// The distribution is symmetric when `α = β`.
+///
+/// # Plot
+///
+/// The plot shows the Beta distribution with various combinations
+/// of `α` and `β`.
+///
+/// ![Beta distribution](https://raw.githubusercontent.com/rust-random/charts/main/charts/beta.svg)
 ///
 /// # Example
 ///
@@ -566,7 +624,9 @@ where
     F: Float,
     Open01: Distribution<F>,
 {
-    a: F, b: F, switched_params: bool,
+    a: F,
+    b: F,
+    switched_params: bool,
     algorithm: BetaAlgorithm<F>,
 }
 
@@ -590,7 +650,6 @@ impl fmt::Display for BetaError {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "std")))]
 impl std::error::Error for BetaError {}
 
 impl<F> Beta<F>
@@ -618,15 +677,19 @@ where
         if a > F::one() {
             // Algorithm BB
             let alpha = a + b;
-            let beta = ((alpha - F::from(2.).unwrap())
-                        / (F::from(2.).unwrap()*a*b - alpha)).sqrt();
+
+            let two = F::from(2.).unwrap();
+            let beta_numer = alpha - two;
+            let beta_denom = two * a * b - alpha;
+            let beta = (beta_numer / beta_denom).sqrt();
+
             let gamma = a + F::one() / beta;
 
             Ok(Beta {
-                a, b, switched_params,
-                algorithm: BetaAlgorithm::BB(BB {
-                    alpha, beta, gamma,
-                })
+                a,
+                b,
+                switched_params,
+                algorithm: BetaAlgorithm::BB(BB { alpha, beta, gamma }),
             })
         } else {
             // Algorithm BC
@@ -637,16 +700,21 @@ where
             let beta = F::one() / b;
             let delta = F::one() + a - b;
             let kappa1 = delta
-                * (F::from(1. / 18. / 4.).unwrap() + F::from(3. / 18. / 4.).unwrap()*b)
-                / (a*beta - F::from(14. / 18.).unwrap());
+                * (F::from(1. / 18. / 4.).unwrap() + F::from(3. / 18. / 4.).unwrap() * b)
+                / (a * beta - F::from(14. / 18.).unwrap());
             let kappa2 = F::from(0.25).unwrap()
-                + (F::from(0.5).unwrap() + F::from(0.25).unwrap()/delta)*b;
+                + (F::from(0.5).unwrap() + F::from(0.25).unwrap() / delta) * b;
 
             Ok(Beta {
-                a, b, switched_params,
+                a,
+                b,
+                switched_params,
                 algorithm: BetaAlgorithm::BC(BC {
-                    alpha, beta, kappa1, kappa2,
-                })
+                    alpha,
+                    beta,
+                    kappa1,
+                    kappa2,
+                }),
             })
         }
     }
@@ -667,12 +735,11 @@ where
                     let u2 = rng.sample(Open01);
                     let v = algo.beta * (u1 / (F::one() - u1)).ln();
                     w = self.a * v.exp();
-                    let z = u1*u1 * u2;
+                    let z = u1 * u1 * u2;
                     let r = algo.gamma * v - F::from(4.).unwrap().ln();
                     let s = self.a + r - w;
                     // 2.
-                    if s + F::one() + F::from(5.).unwrap().ln()
-                        >= F::from(5.).unwrap() * z {
+                    if s + F::one() + F::from(5.).unwrap().ln() >= F::from(5.).unwrap() * z {
                         break;
                     }
                     // 3.
@@ -685,7 +752,7 @@ where
                         break;
                     }
                 }
-            },
+            }
             BetaAlgorithm::BC(algo) => {
                 loop {
                     let z;
@@ -716,11 +783,13 @@ where
                     let v = algo.beta * (u1 / (F::one() - u1)).ln();
                     w = self.a * v.exp();
                     if !(algo.alpha * ((algo.alpha / (self.b + w)).ln() + v)
-                         - F::from(4.).unwrap().ln() < z.ln()) {
+                        - F::from(4.).unwrap().ln()
+                        < z.ln())
+                    {
                         break;
                     };
                 }
-            },
+            }
         };
         // 5. for BB, 6. for BC
         if !self.switched_params {
