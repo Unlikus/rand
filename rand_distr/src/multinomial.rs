@@ -9,111 +9,190 @@
 
 //! The multinomial distribution.
 
-use crate::{Binomial, Distribution};
-use rand::Rng;
+use core::usize;
 
+use crate::{Binomial, Distribution};
+use num_traits::AsPrimitive;
+use rand::Rng;
 
 /// Error type returned from `Multinomial::new`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     /// There is a negative weight or Nan
     ProbabilityNegative,
-    /// All weights are zero
-    ProbabilityZero,
-    /// One of the weights is inf or the sum overflows
-    ProbabilityInfinity,
+    /// Sum overflows to inf
+    SumOverflow,
+    /// Sum is zero
+    SumZero,
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Error::ProbabilityNegative => "One of the weights is negative or Nan",
-            Error::ProbabilityZero => "All of the weights are zero",
-            Error::ProbabilityInfinity => "One of the weights is inf or the sum overflows",
+            Error::SumOverflow => "Sum of weights overflows to inf",
+            Error::SumZero => "Sum of weights is zero",
         })
     }
 }
 
+/// The multinomial distribution.
+#[derive(Debug)]
+pub struct Multinomial {}
+
+impl Multinomial {
+    /// Constructs a new `Multinomial` distribution which samples `K` samples.
+    ///
+    /// `n` is the number of draws.
+    ///
+    /// `weights` have to be non negative and will be normalized to 1.
+    ///
+    /// `K` has to be known at compile time
+    pub fn new_const<const K: usize, I>(
+        n: I,
+        weights: &[f64; K],
+    ) -> Result<MultinomialConst<K, I>, Error>
+    where
+        I: num_traits::PrimInt,
+        u64: num_traits::AsPrimitive<I>,
+        I: num_traits::AsPrimitive<u64>,
+    {
+        let all_pos = weights.iter().all(|&x| x >= 0.0);
+
+        if !all_pos {
+            return Err(Error::ProbabilityNegative);
+        }
+
+        let sum: f64 = weights.iter().sum();
+
+        if !sum.is_finite() {
+            return Err(Error::SumOverflow);
+        }
+
+        if sum == 0.0 {
+            return Err(Error::SumZero);
+        }
+
+        return Ok(MultinomialConst::<K, I> {
+            n,
+            weights: weights,
+            sum,
+        });
+    }
+
+    #[cfg(feature = "alloc")]
+    /// Constructs a new `Multinomial` distribution which samples `K` samples.
+    ///
+    /// `n` is the number of draws.
+    ///
+    /// `weights` have to be not negative and will be normalized to 1.
+    ///
+    /// `K` can be specified at runtime
+    pub fn new_dyn<I>(n: I, weights: &[f64]) -> Result<MultinomialDyn<'_, I>, Error> {
+        let all_pos = weights.iter().all(|&x| x >= 0.0);
+
+        if !all_pos {
+            return Err(Error::ProbabilityNegative);
+        }
+
+        let sum: f64 = weights.iter().sum();
+
+        if !sum.is_finite() {
+            return Err(Error::SumOverflow);
+        }
+
+        if sum == 0.0 {
+            return Err(Error::SumZero);
+        }
+
+        return Ok(MultinomialDyn::<I> {
+            n,
+            weights: weights,
+            sum,
+        });
+    }
+}
 /// Multinomial Distribution with compile time known number of categories.
+/// Can be created with [Multinomial::new_const].
 #[derive(Debug, Clone, PartialEq)]
-pub struct MultinomialConst<const K: usize> {
-    /// Number of draws
-    n: u64,
-    /// normalized weights for the multinomial distribution
-    /// Garantied to be not negative and they should add to a value close to 1.0
-    weights: [f64; K],
+pub struct MultinomialConst<'a, const K: usize, I> {
+    /// number of draws
+    n: I,
+    /// weights for the multinomial distribution
+    weights: &'a [f64; K],
+    /// sum of the weights
+    sum: f64,
 }
 
-fn normalize<const K: usize>(weights: &mut [f64; K]) -> Result<(), Error> {
-    if weights.iter().any(|&x| x < 0.0) {
-        return Err(Error::ProbabilityNegative);
-    }
-
-    let sum: f64 = weights.iter().sum();
-
-    if sum == 0.0 {
-        return Err(Error::ProbabilityZero);
-    }
-
-    if sum == f64::INFINITY {
-        return Err(Error::ProbabilityInfinity);
-    }
-
-    weights.iter_mut().for_each(|x| *x /= sum);
-
-    Ok(())
+#[cfg(feature = "alloc")]
+/// Multinomial Distribution with number of categories known at runtime.
+/// Can be created with [Multinomial::new_dyn].
+#[derive(Debug, Clone, PartialEq)]
+pub struct MultinomialDyn<'a, I> {
+    /// number of draws
+    n: I,
+    /// weights for the multinomial distribution
+    weights: &'a [f64],
+    /// sum of the weights
+    sum: f64,
 }
 
-impl<const K: usize> MultinomialConst<K> {
-    /// Constructs a new `MultinomialConst` which samples `[f64; K]` samples for a compile time constant `K`.
-    /// 
-    /// `weights` will be normalized so it sums up to 1.
-    pub fn new(n: u64, mut weights: [f64; K]) -> Result<Self, Error> {
-        // With improvements in Rust support for const generics this can probably be solved better
-        if K == 0 {
-            panic!("MultinomialConst<0> is not a valid type");
+/// sum has to be the sum of the weights, this is a performance optimization
+fn sample<R: Rng + ?Sized, I: Copy + 'static>(
+    rng: &mut R,
+    n: I,
+    weights: &[f64],
+    sum: f64,
+    result: &mut [I],
+) where
+    I: num_traits::PrimInt,
+    u64: num_traits::AsPrimitive<I>,
+    I: num_traits::AsPrimitive<u64>,
+{
+    // This follows the binomial approach in "The computer generation of multinomial random variates" by Charles S. Davis
+
+    let mut sum_p = 0.0;
+    let mut sum_n: I = 0.as_();
+
+    for k in 0..weights.len() {
+        if sum - sum_p <= 0.0 {
+            result[k] = 0.as_();
+            continue;
         }
 
-        normalize(&mut weights)?;
-
-        Ok(MultinomialConst { n, weights })
+        let prob = (weights[k] / (sum - sum_p)).min(1.0);
+        let binomial = Binomial::new((n - sum_n).as_(), prob)
+            .expect("We know that prob is between 0.0 and 1.0");
+        result[k] = binomial.sample(rng).as_();
+        sum_n = sum_n + result[k];
+        sum_p += weights[k];
     }
 }
 
-impl<const K: usize> Distribution<[u64; K]> for MultinomialConst<K> {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> [u64; K] {
-        // This follows the binomial approach in "The computer generation of multinomial random variates" by Charles S. Davis
-        // Se also the numpy soruce for random_multinomial
+impl<'a, const K: usize, I> Distribution<[I; K]> for MultinomialConst<'a, K, I>
+where
+    I: num_traits::PrimInt,
+    u64: num_traits::AsPrimitive<I>,
+    I: num_traits::AsPrimitive<u64>,
+{
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> [I; K] {
+        let mut result = [0.as_(); K];
+        sample(rng, self.n, self.weights, self.sum, &mut result);
+        result
+    }
+}
 
-        // We assume K >= 1
-        // We assume that self.weights are all non negative and finite
-        // If the weights sum up < 1.0 the last component will get the remaining weight
-        // If the weights sum up > 1.0 the components after the first i with weights[..i] > 1.0 will get zero weights
-
-        let mut sample = [0u64; K];
-        let mut remaining_p = 1.0;
-        let mut remaining_n = self.n;
-
-        for i in 0..(K - 1) {
-            if remaining_p <= 0.0 {
-                break;
-            }
-
-            // It's possible that weights/remaining_p can become slightly bigger than 1.0
-            let binomial = Binomial::new(remaining_n, (self.weights[i] / remaining_p).min(1.0))
-                .expect("We know that prob is between 0.0 and 1.0");
-            sample[i] = binomial.sample(rng);
-            // This cannot overflow because sample[i] is garantied to be <= remaining_n, because it's a binomial sample
-            remaining_n -= sample[i];
-            if remaining_n == 0 {
-                break;
-            }
-            remaining_p -= self.weights[i];
-        }
-
-        sample[K - 1] = remaining_n;
-
-        sample
+#[cfg(feature = "alloc")]
+impl<'a, I> Distribution<alloc::vec::Vec<I>> for MultinomialDyn<'a, I>
+where
+    I: num_traits::PrimInt,
+    u64: num_traits::AsPrimitive<I>,
+    I: num_traits::AsPrimitive<u64>,
+{
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> alloc::vec::Vec<I> {
+        let mut result = alloc::vec![0.as_(); self.weights.len()];
+        sample(rng, self.n, self.weights, self.sum, &mut result);
+        result
     }
 }
 
@@ -121,5 +200,68 @@ impl<const K: usize> Distribution<[u64; K]> for MultinomialConst<K> {
 mod test {
 
     #[test]
-    fn test_multinomial() {}
+    fn test_multinomial_const() {
+        use super::*;
+
+        let n: i32 = 1000;
+        let weights = [0.1, 0.2, 0.3, 0.4];
+        let mut rng = crate::test::rng(123);
+        let multinomial = Multinomial::new_const(n, &weights).unwrap();
+        let sample = multinomial.sample(&mut rng);
+        assert_eq!(sample.iter().sum::<i32>(), n);
+    }
+
+    #[test]
+    fn test_almost_zero_dist() {
+        use super::*;
+
+        let n: i32 = 1000;
+        let weights = [0.0, 0.0, 0.0, 0.000000001];
+        let multinomial = Multinomial::new_const(n, &weights).unwrap();
+        let sample = multinomial.sample(&mut crate::test::rng(123));
+        assert!(sample[3] == n);
+    }
+
+    #[test]
+    fn test_zero_dist() {
+        use super::*;
+
+        let n: i32 = 1000;
+        let weights = [0.0, 0.0, 0.0, 0.0];
+        let multinomial = Multinomial::new_const(n, &weights);
+        assert_eq!(multinomial, Err(Error::SumZero));
+    }
+
+    #[test]
+    fn test_negative_dist() {
+        use super::*;
+
+        let n: i32 = 1000;
+        let weights = [0.1, 0.2, 0.3, -0.6];
+        let multinomial = Multinomial::new_const(n, &weights);
+        assert_eq!(multinomial, Err(Error::ProbabilityNegative));
+    }
+
+    #[test]
+    fn test_overflow() {
+        use super::*;
+
+        let n: i32 = 1000;
+        let weights = [f64::MAX, f64::MAX, f64::MAX, f64::MAX];
+        let multinomial = Multinomial::new_const(n, &weights);
+        assert_eq!(multinomial, Err(Error::SumOverflow));
+    }
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn test_multinomial_dyn() {
+        use super::*;
+
+        let n = 1000;
+        let weights = [0.1, 0.2, 0.3, 0.4];
+        let mut rng = crate::test::rng(123);
+        let multinomial = Multinomial::new_dyn(n, &weights).unwrap();
+        let sample = multinomial.sample(&mut rng);
+        assert_eq!(sample.iter().sum::<u64>(), n);
+    }
 }
