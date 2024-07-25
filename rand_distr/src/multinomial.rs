@@ -36,7 +36,7 @@ impl std::fmt::Display for Error {
     }
 }
 
-/// The multinomial distribution.
+/// The [Multinomial](https://en.wikipedia.org/wiki/Multinomial_distribution) distribution `Multinomial(n, w)`.
 #[derive(Debug)]
 pub struct Multinomial {}
 

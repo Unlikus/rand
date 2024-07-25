@@ -48,6 +48,7 @@
 //!   - [`Cauchy`] distribution
 //! - Related to Bernoulli trials (yes/no events, with a given probability):
 //!   - [`Binomial`] distribution
+//!   - [`Multinomial`] distribution
 //!   - [`Geometric`] distribution
 //!   - [`Hypergeometric`] distribution
 //! - Related to positive real-valued quantities that grow exponentially
