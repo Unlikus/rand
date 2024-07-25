@@ -31,7 +31,7 @@ where
     samplers: [Gamma<F>; N],
 }
 
-/// Error type returned from `DirchletFromGamma::new`.
+/// Error type returned from [`DirchletFromGamma::new`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DirichletFromGammaError {
     /// Gamma::new(a, 1) failed.
@@ -103,7 +103,7 @@ where
     samplers: Box<[Beta<F>]>,
 }
 
-/// Error type returned from `DirchletFromBeta::new`.
+/// Error type returned from [`DirchletFromBeta::new`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DirichletFromBetaError {
     /// Beta::new(a, b) failed.
@@ -226,7 +226,7 @@ where
     repr: DirichletRepr<F, N>,
 }
 
-/// Error type returned from `Dirchlet::new`.
+/// Error type returned from [`Dirichlet::new`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     /// `alpha.len() < 2`.
@@ -333,20 +333,13 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use alloc::vec::Vec;
 
     #[test]
     fn test_dirichlet() {
         let d = Dirichlet::new([1.0, 2.0, 3.0]).unwrap();
         let mut rng = crate::test::rng(221);
         let samples = d.sample(&mut rng);
-        let _: Vec<f64> = samples
-            .into_iter()
-            .map(|x| {
-                assert!(x > 0.0);
-                x
-            })
-            .collect();
+        assert!(samples.into_iter().all(|x: f64| x > 0.0));
     }
 
     #[test]

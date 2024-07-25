@@ -27,8 +27,8 @@
 //!
 //! ## Re-exports
 //!
-//! This crate is a super-set of the [`rand::distributions`] module. See the
-//! [`rand::distributions`] module documentation for an overview of the core
+//! This crate is a super-set of the [`rand::distr`] module. See the
+//! [`rand::distr`] module documentation for an overview of the core
 //! [`Distribution`] trait and implementations.
 //!
 //! The following are re-exported:
@@ -93,21 +93,21 @@ extern crate std;
 #[allow(unused)]
 use rand::Rng;
 
-pub use rand::distributions::{
+pub use rand::distr::{
     uniform, Alphanumeric, Bernoulli, BernoulliError, DistIter, Distribution, Open01, OpenClosed01,
     Standard, Uniform,
 };
 
+pub use self::beta::{Beta, Error as BetaError};
 pub use self::binomial::{Binomial, Error as BinomialError};
 pub use self::cauchy::{Cauchy, Error as CauchyError};
+pub use self::chi_squared::{ChiSquared, Error as ChiSquaredError};
 #[cfg(feature = "alloc")]
 pub use self::dirichlet::{Dirichlet, Error as DirichletError};
 pub use self::exponential::{Error as ExpError, Exp, Exp1};
+pub use self::fisher_f::{Error as FisherFError, FisherF};
 pub use self::frechet::{Error as FrechetError, Frechet};
-pub use self::gamma::{
-    Beta, BetaError, ChiSquared, ChiSquaredError, Error as GammaError, FisherF, FisherFError,
-    Gamma, StudentT,
-};
+pub use self::gamma::{Error as GammaError, Gamma};
 pub use self::geometric::{Error as GeoError, Geometric, StandardGeometric};
 pub use self::gumbel::{Error as GumbelError, Gumbel};
 pub use self::hypergeometric::{Error as HyperGeoError, Hypergeometric};
@@ -118,7 +118,7 @@ pub use self::normal_inverse_gaussian::{
 };
 pub use self::multinomial::{MultinomialConst, Error as MultinomialError};
 pub use self::pareto::{Error as ParetoError, Pareto};
-pub use self::pert::{Pert, PertError};
+pub use self::pert::{Pert, PertBuilder, PertError};
 pub use self::poisson::{Error as PoissonError, Poisson};
 pub use self::skew_normal::{Error as SkewNormalError, SkewNormal};
 pub use self::triangular::{Triangular, TriangularError};
@@ -127,9 +127,11 @@ pub use self::unit_circle::UnitCircle;
 pub use self::unit_disc::UnitDisc;
 pub use self::unit_sphere::UnitSphere;
 pub use self::weibull::{Error as WeibullError, Weibull};
-pub use self::zipf::{Zeta, ZetaError, Zipf, ZipfError};
+pub use self::zeta::{Error as ZetaError, Zeta};
+pub use self::zipf::{Error as ZipfError, Zipf};
 #[cfg(feature = "alloc")]
-pub use rand::distributions::{WeightError, WeightedIndex};
+pub use rand::distr::{WeightError, WeightedIndex};
+pub use student_t::StudentT;
 #[cfg(feature = "alloc")]
 pub use weighted_alias::WeightedAliasIndex;
 #[cfg(feature = "alloc")]
@@ -193,10 +195,13 @@ pub mod weighted_alias;
 #[cfg(feature = "alloc")]
 pub mod weighted_tree;
 
+mod beta;
 mod binomial;
 mod cauchy;
+mod chi_squared;
 mod dirichlet;
 mod exponential;
+mod fisher_f;
 mod frechet;
 mod gamma;
 mod geometric;
@@ -210,6 +215,7 @@ mod pareto;
 mod pert;
 mod poisson;
 mod skew_normal;
+mod student_t;
 mod triangular;
 mod unit_ball;
 mod unit_circle;
@@ -217,5 +223,6 @@ mod unit_disc;
 mod unit_sphere;
 mod utils;
 mod weibull;
+mod zeta;
 mod ziggurat_tables;
 mod zipf;

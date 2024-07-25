@@ -11,9 +11,9 @@
 use super::increasing_uniform::IncreasingUniform;
 use super::{gen_index, index};
 #[cfg(feature = "alloc")]
-use crate::distributions::uniform::{SampleBorrow, SampleUniform};
+use crate::distr::uniform::{SampleBorrow, SampleUniform};
 #[cfg(feature = "alloc")]
-use crate::distributions::{Weight, WeightError};
+use crate::distr::{Weight, WeightError};
 use crate::Rng;
 use core::ops::{Index, IndexMut};
 
@@ -137,7 +137,7 @@ pub trait IndexedRandom: Index<usize> {
     ///
     /// For slices of length `n`, complexity is `O(n)`.
     /// For more information about the underlying algorithm,
-    /// see [`distributions::WeightedIndex`].
+    /// see [`distr::WeightedIndex`].
     ///
     /// See also [`choose_weighted_mut`].
     ///
@@ -154,7 +154,7 @@ pub trait IndexedRandom: Index<usize> {
     /// ```
     /// [`choose`]: IndexedRandom::choose
     /// [`choose_weighted_mut`]: IndexedMutRandom::choose_weighted_mut
-    /// [`distributions::WeightedIndex`]: crate::distributions::WeightedIndex
+    /// [`distr::WeightedIndex`]: crate::distr::WeightedIndex
     #[cfg(feature = "alloc")]
     fn choose_weighted<R, F, B, X>(
         &self,
@@ -167,7 +167,7 @@ pub trait IndexedRandom: Index<usize> {
         B: SampleBorrow<X>,
         X: SampleUniform + Weight + PartialOrd<X>,
     {
-        use crate::distributions::{Distribution, WeightedIndex};
+        use crate::distr::{Distribution, WeightedIndex};
         let distr = WeightedIndex::new((0..self.len()).map(|idx| weight(&self[idx])))?;
         Ok(&self[distr.sample(rng)])
     }
@@ -268,13 +268,13 @@ pub trait IndexedMutRandom: IndexedRandom + IndexMut<usize> {
     ///
     /// For slices of length `n`, complexity is `O(n)`.
     /// For more information about the underlying algorithm,
-    /// see [`distributions::WeightedIndex`].
+    /// see [`distr::WeightedIndex`].
     ///
     /// See also [`choose_weighted`].
     ///
     /// [`choose_mut`]: IndexedMutRandom::choose_mut
     /// [`choose_weighted`]: IndexedRandom::choose_weighted
-    /// [`distributions::WeightedIndex`]: crate::distributions::WeightedIndex
+    /// [`distr::WeightedIndex`]: crate::distr::WeightedIndex
     #[cfg(feature = "alloc")]
     fn choose_weighted_mut<R, F, B, X>(
         &mut self,
@@ -287,7 +287,7 @@ pub trait IndexedMutRandom: IndexedRandom + IndexMut<usize> {
         B: SampleBorrow<X>,
         X: SampleUniform + Weight + PartialOrd<X>,
     {
-        use crate::distributions::{Distribution, WeightedIndex};
+        use crate::distr::{Distribution, WeightedIndex};
         let distr = WeightedIndex::new((0..self.len()).map(|idx| weight(&self[idx])))?;
         let index = distr.sample(rng);
         Ok(&mut self[index])
@@ -495,19 +495,24 @@ mod test {
         assert_eq!(chars.choose(&mut r), Some(&'l'));
         assert_eq!(nums.choose_mut(&mut r), Some(&mut 3));
 
+        assert_eq!(
+            &chars.choose_multiple_array(&mut r),
+            &Some(['f', 'i', 'd', 'b', 'c', 'm', 'j', 'k'])
+        );
+
         #[cfg(feature = "alloc")]
         assert_eq!(
             &chars
                 .choose_multiple(&mut r, 8)
                 .cloned()
                 .collect::<Vec<char>>(),
-            &['f', 'i', 'd', 'b', 'c', 'm', 'j', 'k']
+            &['h', 'm', 'd', 'b', 'c', 'e', 'n', 'f']
         );
 
         #[cfg(feature = "alloc")]
-        assert_eq!(chars.choose_weighted(&mut r, |_| 1), Ok(&'l'));
+        assert_eq!(chars.choose_weighted(&mut r, |_| 1), Ok(&'i'));
         #[cfg(feature = "alloc")]
-        assert_eq!(nums.choose_weighted_mut(&mut r, |_| 1), Ok(&mut 8));
+        assert_eq!(nums.choose_weighted_mut(&mut r, |_| 1), Ok(&mut 2));
 
         let mut r = crate::test::rng(414);
         nums.shuffle(&mut r);

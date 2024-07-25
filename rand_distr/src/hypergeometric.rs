@@ -4,7 +4,7 @@ use crate::Distribution;
 use core::fmt;
 #[allow(unused_imports)]
 use num_traits::Float;
-use rand::distributions::uniform::Uniform;
+use rand::distr::uniform::Uniform;
 use rand::Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -68,7 +68,7 @@ pub struct Hypergeometric {
     sampling_method: SamplingMethod,
 }
 
-/// Error type returned from `Hypergeometric::new`.
+/// Error type returned from [`Hypergeometric::new`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     /// `total_population_size` is too large, causing floating point underflow.

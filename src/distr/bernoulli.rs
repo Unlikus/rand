@@ -8,7 +8,7 @@
 
 //! The Bernoulli distribution `Bernoulli(p)`.
 
-use crate::distributions::Distribution;
+use crate::distr::Distribution;
 use crate::Rng;
 use core::fmt;
 
@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 /// # Example
 ///
 /// ```rust
-/// use rand::distributions::{Bernoulli, Distribution};
+/// use rand::distr::{Bernoulli, Distribution};
 ///
 /// let d = Bernoulli::new(0.3).unwrap();
 /// let v = d.sample(&mut rand::thread_rng());
@@ -75,7 +75,7 @@ const ALWAYS_TRUE: u64 = u64::MAX;
 // in `no_std` mode.
 const SCALE: f64 = 2.0 * (1u64 << 63) as f64;
 
-/// Error type returned from `Bernoulli::new`.
+/// Error type returned from [`Bernoulli::new`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BernoulliError {
     /// `p < 0` or `p > 1`.
@@ -153,7 +153,7 @@ impl Distribution<bool> for Bernoulli {
 #[cfg(test)]
 mod test {
     use super::Bernoulli;
-    use crate::distributions::Distribution;
+    use crate::distr::Distribution;
     use crate::Rng;
 
     #[test]
